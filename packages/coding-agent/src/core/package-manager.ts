@@ -903,6 +903,9 @@ export class DefaultPackageManager implements PackageManager {
 			const target = this.getTargetMap(accumulator, resourceType);
 			const globalEntries = (globalSettings[resourceType] ?? []) as string[];
 			const projectEntries = (projectSettings[resourceType] ?? []) as string[];
+			// Project settings entries resolve relative to cwd (not .pi/) so
+			// users can write paths like "src/skills" and have them resolve
+			// against the project root.
 			this.resolveLocalEntries(
 				projectEntries,
 				resourceType,
@@ -912,7 +915,7 @@ export class DefaultPackageManager implements PackageManager {
 					scope: "project",
 					origin: "top-level",
 				},
-				projectBaseDir,
+				this.cwd,
 			);
 			this.resolveLocalEntries(
 				globalEntries,
@@ -2356,12 +2359,21 @@ export class DefaultPackageManager implements PackageManager {
 			);
 		}
 
+		// Merge project override patterns into user overrides so project settings
+		// can exclude user/global auto-discovered resources (e.g. skills: ["!some-skill"])
+		const mergedUserOverrides = {
+			extensions: [...getOverridePatterns(projectOverrides.extensions), ...userOverrides.extensions],
+			skills: [...getOverridePatterns(projectOverrides.skills), ...userOverrides.skills],
+			prompts: [...getOverridePatterns(projectOverrides.prompts), ...userOverrides.prompts],
+			themes: [...getOverridePatterns(projectOverrides.themes), ...userOverrides.themes],
+		};
+
 		// User extensions from ~/.pi/agent/
 		addResources(
 			"extensions",
 			collectAutoExtensionEntries(userDirs.extensions),
 			userMetadata,
-			userOverrides.extensions,
+			mergedUserOverrides.extensions,
 			globalBaseDir,
 		);
 
@@ -2370,7 +2382,7 @@ export class DefaultPackageManager implements PackageManager {
 			"skills",
 			collectAutoSkillEntries(userDirs.skills, "pi"),
 			userMetadata,
-			userOverrides.skills,
+			mergedUserOverrides.skills,
 			globalBaseDir,
 		);
 
@@ -2384,7 +2396,7 @@ export class DefaultPackageManager implements PackageManager {
 			"skills",
 			collectAutoSkillEntries(userAgentsSkillsDir, "agents"),
 			userAgentsMetadata,
-			userOverrides.skills,
+			mergedUserOverrides.skills,
 			userAgentsBaseDir,
 		);
 
@@ -2392,14 +2404,14 @@ export class DefaultPackageManager implements PackageManager {
 			"prompts",
 			collectAutoPromptEntries(userDirs.prompts),
 			userMetadata,
-			userOverrides.prompts,
+			mergedUserOverrides.prompts,
 			globalBaseDir,
 		);
 		addResources(
 			"themes",
 			collectAutoThemeEntries(userDirs.themes),
 			userMetadata,
-			userOverrides.themes,
+			mergedUserOverrides.themes,
 			globalBaseDir,
 		);
 	}
